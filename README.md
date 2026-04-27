@@ -1,100 +1,82 @@
 # ReliefSync AI
 
-Hackathon-ready full-stack web app for NGOs and volunteers to collect community needs, prioritize them, rank volunteers, assign work, and let volunteers respond.
+ReliefSync is a full-stack relief coordination app for NGOs and volunteers. The repo is now split into two main folders:
 
-## Stack
+- `client/` for the Vite + React frontend
+- `server/` for the Node API and local JSON data store
 
-- Frontend: Vite, React, React Router, Tailwind CSS, Recharts
-- Backend: dependency-free Node HTTP API
-- Storage: local JSON database seeded on first API start
-- AI: optional OpenAI-compatible LLM call with deterministic fallback heuristics
+## Workspace Commands
 
-## Run Locally
-
-Install dependencies:
+Install everything from the repo root:
 
 ```bash
-pnpm install
+npm install
 ```
 
-Start the backend API in one terminal:
+Start both apps together:
 
 ```bash
-pnpm api
+npm run dev
 ```
 
-Start the frontend in another terminal:
+Start only the backend API:
 
 ```bash
-pnpm dev
+npm run api
 ```
 
-Open the Vite URL shown in the terminal, usually `http://localhost:5173`.
+Start only the frontend:
+
+```bash
+npm run dev:client
+```
+
+Build the frontend:
+
+```bash
+npm run build
+```
+
+Run backend tests:
+
+```bash
+npm run test
+```
+
+Run frontend type checking:
+
+```bash
+npm run typecheck
+```
+
+If PowerShell blocks `npm`, run the same commands with `npm.cmd` instead.
 
 ## Demo Accounts
 
-All demo passwords are:
-
-```text
-demo1234
-```
+All demo passwords are `demo1234`.
 
 - Admin: `admin@relief.org`
 - NGO: `ngo@relief.org`
 - Volunteer: `volunteer@email.com`
 - Volunteer: `emily@relief.org`
 
-## Demo Flow
-
-1. Sign in as `ngo@relief.org`.
-2. Open **Create Need** and submit messy raw request text.
-3. ReliefSync structures the need, assigns urgency, gives a priority score, and explains the reason.
-4. Open the need details or **Volunteer Matching** to view ranked volunteers.
-5. Assign a volunteer.
-6. Sign out and sign in as `volunteer@email.com`.
-7. Accept or reject the assignment, then mark it completed.
-
 ## Environment Variables
 
-Backend:
+Server:
 
 ```bash
 PORT=5001
 CORS_ORIGIN=http://localhost:5173
 RELIEFSYNC_DB_PATH=/absolute/path/to/db.json
-OPENAI_API_KEY=optional
-OPENAI_MODEL=optional
+GEMINI_API_KEY=your_google_ai_studio_key
+GEMINI_MODEL=gemini-2.5-flash
 AI_TIMEOUT_MS=8000
 ```
 
-Frontend:
+Client:
 
 ```bash
 VITE_API_URL=http://localhost:5001/api
 ```
 
-No AI key is required for the demo. When `OPENAI_API_KEY` is missing or an LLM request fails, the backend returns deterministic heuristic results with a human-readable reason.
-
-## API Highlights
-
-- `POST /api/auth/login`
-- `POST /api/auth/signup`
-- `GET /api/dashboard`
-- `GET /api/needs`
-- `POST /api/needs`
-- `GET /api/needs/:id`
-- `PATCH /api/needs/:id`
-- `GET /api/needs/:id/matches`
-- `POST /api/needs/:id/assign`
-- `GET /api/volunteers`
-- `GET /api/volunteers/me/dashboard`
-- `PATCH /api/volunteers/me`
-- `POST /api/assignments/:id/respond`
-- `PATCH /api/assignments/:id/status`
-
-## Verification
-
-```bash
-pnpm test
-pnpm build
-```
+The server reads Gemini credentials from `server/.env`. A ready-to-fill example is in `server/.env.example`.

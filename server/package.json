@@ -1,0 +1,15 @@
+{
+  "name": "reliefsync-server",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "dependencies": {
+    "@google/genai": "^1.18.0",
+    "dotenv": "^16.4.7"
+  },
+  "scripts": {
+    "dev": "node ./src/index.mjs",
+    "start": "node ./src/index.mjs",
+    "test": "node --test"
+  }
+}
