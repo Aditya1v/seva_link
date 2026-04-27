@@ -4,20 +4,38 @@ import { prioritizeNeed, rankVolunteersForNeed } from "./services/aiService.mjs"
 import { createId, hashPassword, loadDb, nowIso, publicUser, saveDb, verifyPassword } from "./store.mjs";
 
 const PORT = Number(process.env.PORT || 5001);
-const JSON_HEADERS = {
-  "Content-Type": "application/json",
-  "Access-Control-Allow-Origin": process.env.CORS_ORIGIN || "*",
-  "Access-Control-Allow-Methods": "GET,POST,PATCH,OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization",
-};
+const DEFAULT_ALLOWED_ORIGINS = ["http://localhost:5173", "http://localhost:5174"];
+const configuredOrigins = String(process.env.CORS_ORIGIN || "")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+const allowedOrigins = new Set(configuredOrigins.length ? configuredOrigins : DEFAULT_ALLOWED_ORIGINS);
 
-function sendJson(res, status, payload) {
-  res.writeHead(status, JSON_HEADERS);
+function getJsonHeaders(req) {
+  const requestOrigin = req.headers.origin;
+  const allowOrigin =
+    requestOrigin && allowedOrigins.has(requestOrigin)
+      ? requestOrigin
+      : !requestOrigin && allowedOrigins.size
+        ? [...allowedOrigins][0]
+        : "*";
+
+  return {
+    "Content-Type": "application/json",
+    "Access-Control-Allow-Origin": allowOrigin,
+    "Access-Control-Allow-Methods": "GET,POST,PATCH,OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    Vary: "Origin",
+  };
+}
+
+function sendJson(req, res, status, payload) {
+  res.writeHead(status, getJsonHeaders(req));
   res.end(JSON.stringify(payload));
 }
 
-function sendError(res, status, message, details) {
-  sendJson(res, status, { error: { message, details } });
+function sendError(req, res, status, message, details) {
+  sendJson(req, res, status, { error: { message, details } });
 }
 
 async function readBody(req) {
@@ -195,7 +213,7 @@ function validateNeedUpdate(body) {
 
 async function handleRequest(req, res) {
   if (req.method === "OPTIONS") {
-    sendJson(res, 204, {});
+    sendJson(req, res, 204, {});
     return;
   }
 
@@ -203,7 +221,7 @@ async function handleRequest(req, res) {
   const pathname = url.pathname.replace(/\/$/, "") || "/";
 
   if (!pathname.startsWith("/api")) {
-    sendError(res, 404, "Route not found.");
+    sendError(req, res, 404, "Route not found.");
     return;
   }
 
@@ -211,7 +229,7 @@ async function handleRequest(req, res) {
   const currentUser = getSessionUser(req, db);
 
   if (req.method === "GET" && pathname === "/api/health") {
-    sendJson(res, 200, { ok: true, service: "ReliefSync API" });
+    sendJson(req, res, 200, { ok: true, service: "ReliefSync API" });
     return;
   }
 
@@ -220,13 +238,13 @@ async function handleRequest(req, res) {
     requireFields(body, ["email", "password"]);
     const user = db.users.find((item) => item.email === cleanEmail(body.email));
     if (!user || !verifyPassword(body.password, user.passwordHash)) {
-      sendError(res, 401, "Invalid email or password.");
+      sendError(req, res, 401, "Invalid email or password.");
       return;
     }
     const token = createId("token");
     db.sessions.push({ token, userId: user.id, createdAt: nowIso() });
     await saveDb(db);
-    sendJson(res, 200, { token, user: publicUser(user) });
+    sendJson(req, res, 200, { token, user: publicUser(user) });
     return;
   }
 
@@ -235,15 +253,15 @@ async function handleRequest(req, res) {
     requireFields(body, ["name", "email", "password", "role"]);
     const role = body.role === "ngo" ? "ngo" : body.role === "volunteer" ? "volunteer" : null;
     if (!role) {
-      sendError(res, 400, "Role must be ngo or volunteer.");
+      sendError(req, res, 400, "Role must be ngo or volunteer.");
       return;
     }
     if (String(body.password).length < 8) {
-      sendError(res, 400, "Password must be at least 8 characters.");
+      sendError(req, res, 400, "Password must be at least 8 characters.");
       return;
     }
     if (db.users.some((user) => user.email === cleanEmail(body.email))) {
-      sendError(res, 409, "An account with this email already exists.");
+      sendError(req, res, 409, "An account with this email already exists.");
       return;
     }
 
@@ -286,19 +304,19 @@ async function handleRequest(req, res) {
     const token = createId("token");
     db.sessions.push({ token, userId: user.id, createdAt: nowIso() });
     await saveDb(db);
-    sendJson(res, 201, { token, user: publicUser(user) });
+    sendJson(req, res, 201, { token, user: publicUser(user) });
     return;
   }
 
   if (req.method === "GET" && pathname === "/api/auth/me") {
     assertAuth(currentUser);
-    sendJson(res, 200, { user: publicUser(currentUser) });
+    sendJson(req, res, 200, { user: publicUser(currentUser) });
     return;
   }
 
   if (req.method === "GET" && pathname === "/api/dashboard") {
     assertRole(currentUser, ["admin", "ngo"]);
-    sendJson(res, 200, buildDashboard(db));
+    sendJson(req, res, 200, buildDashboard(db));
     return;
   }
 
@@ -308,7 +326,7 @@ async function handleRequest(req, res) {
     const needs = db.needs
       .filter((need) => !status || need.status === status)
       .sort((a, b) => b.priorityScore - a.priorityScore || String(b.createdAt).localeCompare(String(a.createdAt)));
-    sendJson(res, 200, { needs });
+    sendJson(req, res, 200, { needs });
     return;
   }
 
@@ -336,7 +354,7 @@ async function handleRequest(req, res) {
     };
     db.needs.push(need);
     await saveDb(db);
-    sendJson(res, 201, needWithMatches(db, need));
+    sendJson(req, res, 201, needWithMatches(db, need));
     return;
   }
 
@@ -345,10 +363,10 @@ async function handleRequest(req, res) {
     assertAuth(currentUser);
     const need = db.needs.find((item) => item.id === needMatch[1]);
     if (!need) {
-      sendError(res, 404, "Need not found.");
+      sendError(req, res, 404, "Need not found.");
       return;
     }
-    sendJson(res, 200, needWithMatches(db, need));
+    sendJson(req, res, 200, needWithMatches(db, need));
     return;
   }
 
@@ -356,7 +374,7 @@ async function handleRequest(req, res) {
     assertRole(currentUser, ["admin", "ngo"]);
     const need = db.needs.find((item) => item.id === needMatch[1]);
     if (!need) {
-      sendError(res, 404, "Need not found.");
+      sendError(req, res, 404, "Need not found.");
       return;
     }
     const body = validateNeedUpdate(await readBody(req));
@@ -365,7 +383,7 @@ async function handleRequest(req, res) {
     if (body.keywords !== undefined && !Array.isArray(body.keywords)) body.keywords = String(body.keywords).split(",").map((item) => item.trim()).filter(Boolean);
     Object.assign(need, body, { updatedAt: nowIso(), manualOverride: true });
     await saveDb(db);
-    sendJson(res, 200, needWithMatches(db, need));
+    sendJson(req, res, 200, needWithMatches(db, need));
     return;
   }
 
@@ -374,10 +392,10 @@ async function handleRequest(req, res) {
     assertRole(currentUser, ["admin", "ngo"]);
     const need = db.needs.find((item) => item.id === matchesRoute[1]);
     if (!need) {
-      sendError(res, 404, "Need not found.");
+      sendError(req, res, 404, "Need not found.");
       return;
     }
-    sendJson(res, 200, rankVolunteersForNeed(need, db.volunteers));
+    sendJson(req, res, 200, rankVolunteersForNeed(need, db.volunteers));
     return;
   }
 
@@ -386,14 +404,14 @@ async function handleRequest(req, res) {
     assertRole(currentUser, ["admin", "ngo"]);
     const need = db.needs.find((item) => item.id === assignRoute[1]);
     if (!need) {
-      sendError(res, 404, "Need not found.");
+      sendError(req, res, 404, "Need not found.");
       return;
     }
     const body = await readBody(req);
     requireFields(body, ["volunteerId"]);
     const volunteer = db.volunteers.find((item) => item.id === body.volunteerId);
     if (!volunteer) {
-      sendError(res, 404, "Volunteer not found.");
+      sendError(req, res, 404, "Volunteer not found.");
       return;
     }
 
@@ -421,19 +439,19 @@ async function handleRequest(req, res) {
     });
     updateVolunteerWorkloads(db);
     await saveDb(db);
-    sendJson(res, 200, { need, assignment: summarizeAssignment(db, assignment), matches: rankVolunteersForNeed(need, db.volunteers).matches });
+    sendJson(req, res, 200, { need, assignment: summarizeAssignment(db, assignment), matches: rankVolunteersForNeed(need, db.volunteers).matches });
     return;
   }
 
   if (req.method === "GET" && pathname === "/api/volunteers") {
     assertRole(currentUser, ["admin", "ngo"]);
-    sendJson(res, 200, { volunteers: db.volunteers.sort((a, b) => b.rating - a.rating) });
+    sendJson(req, res, 200, { volunteers: db.volunteers.sort((a, b) => b.rating - a.rating) });
     return;
   }
 
   if (req.method === "GET" && pathname === "/api/volunteers/me/dashboard") {
     assertRole(currentUser, ["volunteer"]);
-    sendJson(res, 200, buildVolunteerDashboard(db, currentUser));
+    sendJson(req, res, 200, buildVolunteerDashboard(db, currentUser));
     return;
   }
 
@@ -441,7 +459,7 @@ async function handleRequest(req, res) {
     assertRole(currentUser, ["volunteer"]);
     const volunteer = db.volunteers.find((item) => item.id === currentUser.volunteerId);
     if (!volunteer) {
-      sendError(res, 404, "Volunteer profile not found.");
+      sendError(req, res, 404, "Volunteer profile not found.");
       return;
     }
     const body = await readBody(req);
@@ -454,7 +472,7 @@ async function handleRequest(req, res) {
     }
     volunteer.capacity = Math.max(1, Number(volunteer.capacity) || 1);
     await saveDb(db);
-    sendJson(res, 200, { volunteer });
+    sendJson(req, res, 200, { volunteer });
     return;
   }
 
@@ -463,16 +481,16 @@ async function handleRequest(req, res) {
     assertRole(currentUser, ["volunteer"]);
     const assignment = db.assignments.find((item) => item.id === responseRoute[1]);
     if (!assignment) {
-      sendError(res, 404, "Assignment not found.");
+      sendError(req, res, 404, "Assignment not found.");
       return;
     }
     if (assignment.volunteerId !== currentUser.volunteerId) {
-      sendError(res, 403, "This assignment belongs to another volunteer.");
+      sendError(req, res, 403, "This assignment belongs to another volunteer.");
       return;
     }
     const body = await readBody(req);
     if (!["accepted", "rejected"].includes(body.status)) {
-      sendError(res, 400, "Status must be accepted or rejected.");
+      sendError(req, res, 400, "Status must be accepted or rejected.");
       return;
     }
     assignment.status = body.status;
@@ -486,7 +504,7 @@ async function handleRequest(req, res) {
     }
     updateVolunteerWorkloads(db);
     await saveDb(db);
-    sendJson(res, 200, { assignment: summarizeAssignment(db, assignment) });
+    sendJson(req, res, 200, { assignment: summarizeAssignment(db, assignment) });
     return;
   }
 
@@ -495,16 +513,16 @@ async function handleRequest(req, res) {
     assertAuth(currentUser);
     const assignment = db.assignments.find((item) => item.id === statusRoute[1]);
     if (!assignment) {
-      sendError(res, 404, "Assignment not found.");
+      sendError(req, res, 404, "Assignment not found.");
       return;
     }
     if (!userCanManage(currentUser) && assignment.volunteerId !== currentUser.volunteerId) {
-      sendError(res, 403, "You cannot update this assignment.");
+      sendError(req, res, 403, "You cannot update this assignment.");
       return;
     }
     const body = await readBody(req);
     if (!["accepted", "completed"].includes(body.status)) {
-      sendError(res, 400, "Status must be accepted or completed.");
+      sendError(req, res, 400, "Status must be accepted or completed.");
       return;
     }
     assignment.status = body.status;
@@ -516,11 +534,11 @@ async function handleRequest(req, res) {
     }
     updateVolunteerWorkloads(db);
     await saveDb(db);
-    sendJson(res, 200, { assignment: summarizeAssignment(db, assignment) });
+    sendJson(req, res, 200, { assignment: summarizeAssignment(db, assignment) });
     return;
   }
 
-  sendError(res, 404, "Route not found.");
+  sendError(req, res, 404, "Route not found.");
 }
 
 const server = http.createServer(async (req, res) => {
@@ -528,7 +546,7 @@ const server = http.createServer(async (req, res) => {
     await handleRequest(req, res);
   } catch (error) {
     const status = error.status || 500;
-    sendError(res, status, status === 500 ? "Unexpected server error." : error.message, status === 500 ? error.message : undefined);
+    sendError(req, res, status, status === 500 ? "Unexpected server error." : error.message, status === 500 ? error.message : undefined);
   }
 });
 
