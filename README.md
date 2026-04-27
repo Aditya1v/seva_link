@@ -1,68 +1,49 @@
 # ReliefSync AI
 
-ReliefSync is a full-stack relief coordination app for NGOs and volunteers. The repo is now split into two main folders:
+ReliefSync is a full-stack app for coordinating NGO relief work and volunteers.
 
-- `client/` for the Vite + React frontend
-- `server/` for the Node API and local JSON data store
+- `client/`: Vite + React frontend
+- `server/`: Node.js API + local JSON data store
 
-## Workspace Commands
+## Quick Start
 
-Install everything from the repo root:
+From the repo root:
 
 ```bash
 npm install
-```
-
-Start both apps together:
-
-```bash
 npm run dev
 ```
 
-Start only the backend API:
+This runs both frontend and backend together.
 
-```bash
-npm run api
-```
+## Common Commands
 
-Start only the frontend:
+- `npm run dev`: run frontend + backend
+- `npm run api`: run backend only
+- `npm run dev:client`: run frontend only
+- `npm run build`: build frontend
+- `npm run test`: run backend tests
+- `npm run typecheck`: run frontend type check
 
-```bash
-npm run dev:client
-```
-
-Build the frontend:
-
-```bash
-npm run build
-```
-
-Run backend tests:
-
-```bash
-npm run test
-```
-
-Run frontend type checking:
-
-```bash
-npm run typecheck
-```
-
-If PowerShell blocks `npm`, run the same commands with `npm.cmd` instead.
+If PowerShell blocks `npm`, use `npm.cmd`.
 
 ## Demo Accounts
 
-All demo passwords are `demo1234`.
+Password for all demo users: `demo1234`
 
 - Admin: `admin@relief.org`
 - NGO: `ngo@relief.org`
 - Volunteer: `volunteer@email.com`
 - Volunteer: `emily@relief.org`
 
-## Environment Variables
+## Environment
 
-Server:
+Create env files as needed:
+
+- Server: `server/.env` (see `server/.env.example`)
+- Client: `client/.env` (set `VITE_API_URL`, default `http://localhost:5001/api`)
+
+Example server values:
 
 ```bash
 PORT=5001
@@ -72,11 +53,3 @@ GEMINI_API_KEY=your_google_ai_studio_key
 GEMINI_MODEL=gemini-2.5-flash
 AI_TIMEOUT_MS=8000
 ```
-
-Client:
-
-```bash
-VITE_API_URL=http://localhost:5001/api
-```
-
-The server reads Gemini credentials from `server/.env`. A ready-to-fill example is in `server/.env.example`.
